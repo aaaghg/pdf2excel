@@ -1,7 +1,6 @@
 import pdfplumber
 from pdf_parser.ty_global.ty_global import TyGlobalParser
 import os
-import pathlib
 
 # def in_rect(point, rect):
 #     px, py = point

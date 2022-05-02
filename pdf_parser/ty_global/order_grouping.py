@@ -8,6 +8,7 @@ class GroupType(IntEnum):
     CasePack = 1,
     ProductSpec = 2,
     PackingSpec = 3,
+    NoUse = 98,
     ZZ = 99,
 
 
@@ -31,8 +32,13 @@ class OrderGroup:
             return PackingSpecGroup(group)
         elif grp_type == GroupType.PackingSpec:
             return PackingSpecGroup(group)
+        elif grp_type == GroupType.NoUse:
+            return NoUseGroup(group)
         elif grp_type == GroupType.ZZ:
             return ZZGroup(group)
+        else:
+            print(f'Warning: NotDefinedGroup:{group}')
+            return NotDefinedGroup(group)
 
     @staticmethod
     def get_group_type(group):
@@ -46,6 +52,8 @@ class OrderGroup:
                 return GroupType.ProductSpec
             elif 'PACKAGING SPECIFICATIONS:' in group[0][3]:
                 return GroupType.PackingSpec
+            elif '****Pre‐press' in group[0][3]:
+                return GroupType.NoUse
             elif 'ZZ‐' in group[0][1]:
                 return GroupType.ZZ
             else:
@@ -69,12 +77,17 @@ class OrderGroup:
         for index in range(2, len(order_texts)):
             text = order_texts[index]
             # It means the end of previous group and a start of new group when got a row with some condition as following
-            # 'ORD QTY' and 'OUR PART NO.' has value,
-            # CASE PACK:
-            # PRODUCT SPECIFICATIONS:
-            # PACKAGING SPECIFICATIONS:
+            # 'ORD QTY' and 'OUR PART NO.' has value, -> start of GroupType.ProductOrder
+            # 'CASE PACK:'                  -> start of GroupType.CasePack
+            # 'PRODUCT SPECIFICATIONS:'     -> start of GroupType.ProductSpec
+            # 'PACKAGING SPECIFICATIONS:'   -> start of GroupType.PackingSpec
+            # '****Pre-press'               -> start of GroupType.NoUse
             # If got above keywords, it need to end up the existing collection
-            if (text[0] != '' and text[1].isdigit()) or 'CASE PACK:' in text[3] or 'PRODUCT SPECIFICATIONS:' in text[3] or 'PACKAGING SPECIFICATIONS:' in text[3]:
+            if (text[0] != '' and text[1].isdigit()) or \
+                    'CASE PACK:' in text[3] or \
+                    'PRODUCT SPECIFICATIONS:' in text[3] or \
+                    'PACKAGING SPECIFICATIONS:' in text[3] or \
+                    '****Pre‐press' in text[3]:
                 # move the collection of current_group to packing_group
                 if len(current_group) > 0:  # previous group had been collected
                     order_group = OrderGroup.factory(current_group)
@@ -86,6 +99,12 @@ class OrderGroup:
                     groups[new_index] = copy.deepcopy(packing_group)
                     packing_group = dict()  # restart a new packing_group
                 current_group.append(text)
+            # the end of packing spec
+            elif 'Finish:' in text[3]:
+                current_group.append(text)
+                order_group = OrderGroup.factory(current_group)
+                packing_group[order_group.name] = order_group
+                current_group.clear()
             else:
                 current_group.append(text)
 
@@ -162,6 +181,24 @@ class ProductSpecGroup(OrderGroup):
 class PackingSpecGroup(OrderGroup):
     def __init__(self, group):
         super(PackingSpecGroup, self).__init__(group)
+        self.group_type = self.get_group_type(group)
+
+    def get_name(self):
+        return self.group[0][3]
+
+
+class NoUseGroup(OrderGroup):
+    def __init__(self, group):
+        super(NoUseGroup, self).__init__(group)
+        self.group_type = self.get_group_type(group)
+
+    def get_name(self):
+        return self.group[0][3]
+
+
+class NotDefinedGroup(OrderGroup):
+    def __init__(self, group):
+        super(NotDefinedGroup, self).__init__(group)
         self.group_type = self.get_group_type(group)
 
     def get_name(self):
